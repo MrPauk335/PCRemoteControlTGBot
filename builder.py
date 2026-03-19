@@ -257,7 +257,11 @@ async def background_build(message: types.Message, token: str, user_id: int):
         proc.wait(timeout=300)
 
         if proc.returncode != 0:
-            raise Exception(f"PyInstaller код: {proc.returncode}")
+            # Читаем лог ошибки
+            with open(log_path, "r", encoding="utf-8") as lf:
+                error_log = lf.read()
+            print(f"PyInstaller ERROR:\n{error_log}")
+            raise Exception(f"PyInstaller код: {proc.returncode}\n\n{error_log[:1000]}")
 
     except asyncio.TimeoutError:
         await status_msg.edit_text(
