@@ -50,3 +50,10 @@ build_*/
 # Временные файлы
 *.tmp
 *.log
+pyinstaller.log
+
+# Личные данные
+.env
+keys.txt
+tokens.txt
+config.local.py

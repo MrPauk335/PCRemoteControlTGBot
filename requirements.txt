@@ -8,3 +8,4 @@ scipy
 pycaw; sys_platform == 'win32'
 comtypes; sys_platform == 'win32'
 pyinstaller
+python-dotenv

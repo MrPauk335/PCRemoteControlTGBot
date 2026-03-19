@@ -14,10 +14,14 @@ from datetime import datetime
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, FSInputFile
+from dotenv import load_dotenv
+
+# Загружаем переменные из .env
+load_dotenv()
 
 # --- НАСТРОЙКИ ---
-TOKEN = "8736760043:AAFymNRqvbZZiUABNb3-ZwJMneU1ndaJa2U"
-MY_ID = 1455766271
+TOKEN = os.getenv("MAIN_BOT_TOKEN")
+MY_ID = int(os.getenv("MY_ID", "1455766271"))
 BOT_NAME = "BotForPC"
 
 # --- ПУТИ ДЛЯ PYINSTALLER ---

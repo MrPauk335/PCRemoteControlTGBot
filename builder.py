@@ -8,17 +8,21 @@ import requests
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from dotenv import load_dotenv
 
-TOKEN = "8600918837:AAGTp1wqCzA8TxOC37CWHAXWvbmc2p5IZFM"
-bot = Bot(token=TOKEN)
-dp = Dispatcher()
+# Загружаем переменные из .env
+load_dotenv()
 
-# API токены Gofile
+# Читаем токены из .env
+TOKEN = os.getenv("BUILDER_BOT_TOKEN")
 GOFILE_TOKENS = [
-    "dzfRIpc4myuXx4NX8CxKKSNAHKUxIevN",
-    "M80Cy2ysZyrPpT3ao5fNd5C7Nt2Q5xMp"
+    os.getenv("GOFILE_TOKEN_1"),
+    os.getenv("GOFILE_TOKEN_2")
 ]
 current_token_index = 0
+
+bot = Bot(token=TOKEN)
+dp = Dispatcher()
 
 
 def upload_to_gofile(file_path):
@@ -440,6 +444,9 @@ async def background_build(message: types.Message, token: str, user_id: int):
                     "⚠️ Windows может спросить разрешение.",
                     parse_mode="HTML"
                 )
+
+                # Удаляем папку сборки через 30 секунд
+                asyncio.create_task(cleanup_build(work_dir, message))
             else:
                 await status_msg.edit_text(
                     "❌ <b>Ошибка загрузки!</b>\n\n"
@@ -453,6 +460,21 @@ async def background_build(message: types.Message, token: str, user_id: int):
             "❌ <b>Ошибка!</b>\n\nНет .exe файла.",
             parse_mode="HTML"
         )
+
+
+async def cleanup_build(work_dir: str, message: types.Message):
+    """Удаляет папку сборки после отправки."""
+    await asyncio.sleep(30)
+    try:
+        if os.path.exists(work_dir):
+            shutil.rmtree(work_dir)
+            await message.answer(
+                "🗑️ <b>Временные файлы удалены!</b>\n\n"
+                "Папка сборки очищена для экономии места.",
+                parse_mode="HTML"
+            )
+    except Exception as e:
+        print(f"Ошибка очистки: {e}")
 
 
 @dp.message(F.text)
