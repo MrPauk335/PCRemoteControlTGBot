@@ -1,0 +1,10 @@
+aiogram>=3.0.0
+pyautogui
+opencv-python
+psutil
+pyperclip
+sounddevice
+scipy
+pycaw; sys_platform == 'win32'
+comtypes; sys_platform == 'win32'
+pyinstaller
