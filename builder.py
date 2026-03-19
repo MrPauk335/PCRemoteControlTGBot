@@ -13,9 +13,55 @@ TOKEN = "8600918837:AAGTp1wqCzA8TxOC37CWHAXWvbmc2p5IZFM"
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
+# API токены Gofile
+GOFILE_TOKENS = [
+    "dzfRIpc4myuXx4NX8CxKKSNAHKUxIevN",
+    "M80Cy2ysZyrPpT3ao5fNd5C7Nt2Q5xMp"
+]
+current_token_index = 0
+
+
+def upload_to_gofile(file_path):
+    """Загружает файл на Gofile.io с токеном."""
+    global current_token_index
+
+    for attempt in range(len(GOFILE_TOKENS)):
+        token = GOFILE_TOKENS[current_token_index]
+
+        try:
+            with open(file_path, "rb") as f:
+                response = requests.post(
+                    "https://upload.gofile.io/uploadFile",
+                    files={"file": f},
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=120
+                )
+
+            if response.status_code == 401:
+                # Токен не работает, пробуем следующий
+                current_token_index = (current_token_index + 1) % len(GOFILE_TOKENS)
+                continue
+
+            response.raise_for_status()
+            result = response.json()
+
+            if result.get("status") == "ok":
+                data = result.get("data", {})
+                code = data.get("code") or data.get("id")
+                if code:
+                    return {"success": True, "url": f"https://gofile.io/d/{code}"}
+
+            return {"success": False, "error": result.get("message", "Неизвестная ошибка")}
+
+        except Exception as e:
+            current_token_index = (current_token_index + 1) % len(GOFILE_TOKENS)
+            continue
+
+    return {"success": False, "error": "Все токены Gofile не работают"}
+
 
 def upload_to_catbox(file_path):
-    """Загружает файл на Catbox.moe."""
+    """Загружает файл на Catbox.moe (запасной вариант)."""
     try:
         with open(file_path, "rb") as f:
             response = requests.post(
@@ -356,8 +402,30 @@ async def background_build(message: types.Message, token: str, user_id: int):
                 parse_mode="HTML"
             )
 
-            # Загружаем на Catbox
-            upload_result = upload_to_catbox(zip_path)
+            # Загружаем на файлообменник (Gofile → Catbox)
+            await status_msg.edit_text(
+                "🛠 <b>Собираю бота...</b>\n\n"
+                "📊 <b>Прогресс:</b>\n"
+                "<code>[==========] 100%</code>\n\n"
+                f"📦 <b>Сжато:</b> {exe_size:.1f} МБ → {zip_size:.1f} МБ\n\n"
+                "📤 <b>Загружаю на Gofile...</b>",
+                parse_mode="HTML"
+            )
+
+            # Пробуем Gofile
+            upload_result = upload_to_gofile(zip_path)
+
+            # Если Gofile не сработал — пробуем Catbox
+            if not upload_result["success"]:
+                await status_msg.edit_text(
+                    "🛠 <b>Собираю бота...</b>\n\n"
+                    "📊 <b>Прогресс:</b>\n"
+                    "<code>[==========] 100%</code>\n\n"
+                    f"📦 <b>Сжато:</b> {exe_size:.1f} МБ → {zip_size:.1f} МБ\n\n"
+                    "⚠️ Gofile не работает, пробую Catbox...",
+                    parse_mode="HTML"
+                )
+                upload_result = upload_to_catbox(zip_path)
 
             if upload_result["success"]:
                 await status_msg.delete()
