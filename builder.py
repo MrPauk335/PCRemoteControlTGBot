@@ -197,10 +197,8 @@ async def background_build(message: types.Message, token: str, user_id: int):
                 "pyinstaller",
                 "--onefile",
                 "--noconsole",
-                "--strip",  # Убирает отладку
-                "--optimize=2",  # Максимальная оптимизация
+                "--optimize=2",  # Оптимизация байт-кода
                 "--noconfirm",  # Не спрашивать подтверждение
-                "--clean",  # Чистить кэш
                 "--hidden-import=cv2",
                 "--hidden-import=pyautogui",
                 "--hidden-import=aiogram",
