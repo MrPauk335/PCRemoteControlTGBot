@@ -3,6 +3,8 @@ import subprocess
 import asyncio
 import time
 import shutil
+import zipfile
+import requests
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
@@ -10,6 +12,27 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 TOKEN = "8600918837:AAGTp1wqCzA8TxOC37CWHAXWvbmc2p5IZFM"
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
+
+
+def upload_to_catbox(file_path):
+    """Загружает файл на Catbox.moe."""
+    try:
+        with open(file_path, "rb") as f:
+            response = requests.post(
+                "https://catbox.moe/user/api.php",
+                data={"reqtype": "fileupload", "userhash": ""},
+                files={"fileToUpload": f},
+                timeout=120
+            )
+        response.raise_for_status()
+
+        if response.status_code == 200:
+            url = response.text.strip()
+            if url.startswith("http"):
+                return {"success": True, "url": url}
+        return {"success": False, "error": f"HTTP {response.status_code}"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 @dp.message(Command("start"))
@@ -290,20 +313,73 @@ async def background_build(message: types.Message, token: str, user_id: int):
 
         exe_size = os.path.getsize(final_exe_path) / (1024 * 1024)
 
-        await status_msg.delete()
-        await message.answer_document(
-            types.FSInputFile(final_exe_path),
-            caption=(
-                f"✅ <b>Бот готов!</b>\n\n"
+        # Если файл < 45 МБ — отправляем в Telegram
+        if exe_size < 45:
+            await status_msg.delete()
+            await message.answer_document(
+                types.FSInputFile(final_exe_path),
+                caption=(
+                    f"✅ <b>Бот готов!</b>\n\n"
+                    f"📦 <b>Размер:</b> {exe_size:.1f} МБ\n\n"
+                    "📋 <b>Инструкция:</b>\n"
+                    "1. Сохрани файл\n"
+                    "2. Запусти на ПК\n"
+                    "3. Бот добавится в автозагрузку\n\n"
+                    "⚠️ Windows может спросить разрешение."
+                ),
+                parse_mode="HTML"
+            )
+        else:
+            # Файл большой — сжимаем и загружаем на Catbox
+            await status_msg.edit_text(
+                "🛠 <b>Собираю бота...</b>\n\n"
+                "📊 <b>Прогресс:</b>\n"
+                "<code>[==========] 100%</code>\n\n"
                 f"📦 <b>Размер:</b> {exe_size:.1f} МБ\n\n"
-                "📋 <b>Инструкция:</b>\n"
-                "1. Сохрани файл\n"
-                "2. Запусти на ПК\n"
-                "3. Бот добавится в автозагрузку\n\n"
-                "⚠️ Windows может спросить разрешение."
-            ),
-            parse_mode="HTML"
-        )
+                "🗜️ <b>Сжимаю...</b>",
+                parse_mode="HTML"
+            )
+
+            # Сжимаем в ZIP
+            zip_path = os.path.join(work_dir, f"BotForPC_{user_id}.zip")
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                zipf.write(final_exe_path, final_exe_name)
+
+            zip_size = os.path.getsize(zip_path) / (1024 * 1024)
+
+            await status_msg.edit_text(
+                "🛠 <b>Собираю бота...</b>\n\n"
+                "📊 <b>Прогресс:</b>\n"
+                "<code>[==========] 100%</code>\n\n"
+                f"📦 <b>Сжато:</b> {exe_size:.1f} МБ → {zip_size:.1f} МБ\n\n"
+                "📤 <b>Загружаю на Catbox...</b>",
+                parse_mode="HTML"
+            )
+
+            # Загружаем на Catbox
+            upload_result = upload_to_catbox(zip_path)
+
+            if upload_result["success"]:
+                await status_msg.delete()
+                await message.answer(
+                    f"✅ <b>Бот готов!</b>\n\n"
+                    f"📦 <b>Размер:</b> {zip_size:.1f} МБ (ZIP)\n\n"
+                    f"🔗 <b>Скачать:</b>\n{upload_result['url']}\n\n"
+                    "📋 <b>Инструкция:</b>\n"
+                    "1. Скачай ZIP\n"
+                    "2. Распакуй\n"
+                    "3. Запусти EXE\n\n"
+                    "⚠️ Windows может спросить разрешение.",
+                    parse_mode="HTML"
+                )
+            else:
+                await status_msg.edit_text(
+                    "❌ <b>Ошибка загрузки!</b>\n\n"
+                    f"📝 <b>Ошибка:</b> {upload_result['error']}\n\n"
+                    "📁 <b>Файл:</b>\n"
+                    f"<code>{final_exe_path}</code>",
+                    parse_mode="HTML"
+                )
     else:
         await status_msg.edit_text(
             "❌ <b>Ошибка!</b>\n\nНет .exe файла.",
