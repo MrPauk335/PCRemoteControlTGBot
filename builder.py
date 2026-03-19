@@ -51,7 +51,27 @@ def upload_to_gofile(file_path):
 
             if result.get("status") == "ok":
                 data = result.get("data", {})
-                code = data.get("code") or data.get("id")
+
+                # Получаем ID папки
+                folder_id = data.get("folderId") or data.get("id")
+
+                # Если есть информация о файле
+                file_info = data.get("fileInfo", {})
+                file_id = file_info.get("id")
+                file_name = file_info.get("fileName")
+
+                # Формируем прямую ссылку на файл
+                if file_id and file_name:
+                    direct_url = f"https://gofile.io/download/file/{file_id}/{file_name}"
+                    return {"success": True, "url": direct_url}
+
+                # Если нет info о файле, пробуем получить через API папки
+                if folder_id:
+                    # Ссылка на папку с файлом
+                    return {"success": True, "url": f"https://gofile.io/d/{folder_id}"}
+
+                # Запасной вариант
+                code = data.get("code")
                 if code:
                     return {"success": True, "url": f"https://gofile.io/d/{code}"}
 
