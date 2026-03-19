@@ -190,18 +190,29 @@ async def background_build(message: types.Message, token: str, user_id: int):
     log_path = os.path.join(work_dir, "pyinstaller.log")
 
     try:
-        # Запускаем в отдельном потоке чтобы не блокировать бота
+        # Оптимизированная сборка
         proc = await asyncio.to_thread(
             subprocess.Popen,
             [
                 "pyinstaller",
                 "--onefile",
                 "--noconsole",
+                "--strip",  # Убирает отладку
+                "--optimize=2",  # Максимальная оптимизация
+                "--noconfirm",  # Не спрашивать подтверждение
+                "--clean",  # Чистить кэш
                 "--hidden-import=cv2",
                 "--hidden-import=pyautogui",
                 "--hidden-import=aiogram",
                 "--hidden-import=psutil",
                 "--hidden-import=pyperclip",
+                "--exclude-import=torch",
+                "--exclude-import=tensorflow",
+                "--exclude-import=transformers",
+                "--exclude-import=nltk",
+                "--exclude-import=sklearn",
+                "--exclude-import=matplotlib",
+                "--exclude-import=pandas",
                 "main.py"
             ],
             cwd=work_dir,
