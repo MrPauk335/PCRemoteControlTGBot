@@ -1,59 +1,44 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# PyInstaller
-*.manifest
-*.spec
-
-# Environments
-.env
-.venv
-env/
+﻿# Dependencies
+node_modules/
 venv/
-ENV/
-env.bak/
-venv.bak/
+.venv/
+env/
+.env/
 
-# IDE
+# Build artifacts
+dist/
+build/
+bin/
+obj/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Cache and temporary files
+.vs/
 .vscode/
 .idea/
 *.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Build directories для билдера
-build_*/
-
-# Временные файлы
-*.tmp
 *.log
-pyinstaller.log
+.DS_Store
 
-# Личные данные
+# Large files
+*.pth
+*.pkl
+*.ckpt
+*.h5
+*.onnx
+*.zip
+*.tar.gz
+*.parquet
+
+# SECRETS (IMPORTANT)
 .env
-keys.txt
-tokens.txt
-config.local.py
+*.ini
+config.json
+*secret*
+*token*
+*.pem
+*.key
+credentials.json
